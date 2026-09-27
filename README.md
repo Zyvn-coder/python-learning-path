@@ -72,10 +72,13 @@
 | `01-` ~ `04-*.md` | **课程内容源**，唯一的内容出处 |
 | `README.md` | 你正在读的这份 |
 | `python-学习工作台.html` | **编译产物**：单文件、离线、零外部依赖，双击即用 |
+| `index.html` | 同一份产物，给 GitHub Pages 当站点首页用 |
 | `tools/` | 编译器与验收工具，[见说明](tools/README.md) |
 
-改课程只需编辑那四份 `.md`，然后 `python tools/build.py` 重新生成工作台。
+改课程只需编辑那四份 `.md`，然后 `python tools/build.py` 重新生成工作台
+（一次构建同时写出上面两份 HTML，内容一致）。
 `tools/` 里还有一套无头浏览器验收（17 个场景 / 640 项断言），用来保证改动没有
 破坏交互与无障碍——细节见 [`tools/README.md`](tools/README.md)。
 
 > 只读课程的话完全不用管 `tools/`，双击 HTML 即可。
+> 也可以直接在线看：**https://zyvn-coder.github.io/python-learning-path/**
