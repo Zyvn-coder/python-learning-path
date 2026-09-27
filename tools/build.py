@@ -4,7 +4,10 @@
 用法（在仓库根目录下）：
     python tools/build.py
 
-产物：<仓库根>/python-学习工作台.html
+产物：
+    python-学习工作台.html  —— 本地双击用（原始名字）
+    index.html               —— 同一份内容，给 GitHub Pages 当站点首页
+    两份由同一次构建写出，内容完全一致。
 中间产物：tools/_content.json（便于排错复核）
 
 依赖：Python 3.9+，以及 `pip install markdown pygments`
@@ -20,6 +23,7 @@ BUILD = Path(__file__).resolve().parent
 ROOT = BUILD.parent
 TPL = BUILD / "template.html"
 OUT = ROOT / "python-学习工作台.html"
+INDEX = ROOT / "index.html"
 
 # ---------------------------------------------------------------- 阶段元信息
 STAGES = [
@@ -547,12 +551,18 @@ def main() -> None:
     tpl = TPL.read_text(encoding="utf-8")
     html = tpl.replace("/*__COURSE_DATA__*/null", payload)
 
+    # 同一份内容写两个地方：
+    #   * python-学习工作台.html —— 本地双击用的原始名字，README 里引的也是它；
+    #   * index.html              —— GitHub Pages 只认它作站点首页，URL 才干净。
+    # 由构建脚本一次性写出两份，所以不存在"改完忘同步"的问题。
     OUT.write_text(html, encoding="utf-8")
+    INDEX.write_text(html, encoding="utf-8")
     (BUILD / "_content.json").write_text(payload, encoding="utf-8")
 
     total_lessons = sum(len(s["lessons"]) for s in stages)
     report = {
         "output": str(OUT),
+        "index": str(INDEX),
         "bytes": OUT.stat().st_size,
         "stages": [
             {
