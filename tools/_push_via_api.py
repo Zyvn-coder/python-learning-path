@@ -67,6 +67,20 @@ def remote_paths():
     return {x["path"]: x["sha"] for x in t.get("tree", []) if x["type"] == "blob"}
 
 
+def remote_file_sha(path):
+    """取远端某文件的当前 blob sha。
+
+    Contents API **更新**已有文件时必须带 `sha`（要改的那一版的 sha），
+    否则回 422 `"sha" wasn't supplied.`。git/trees 给的是 blobs API 的 sha，
+    与这里要的不是同一个值，所以得单独问一次 contents 接口。
+    """
+    try:
+        r = api("/repos/%s/contents/%s?ref=main" % (REPO, urllib.parse.quote(path)))
+        return r.get("sha")
+    except urllib.error.HTTPError:
+        return None
+
+
 def main():
     dry = "--dry-run" in sys.argv
     if not os.environ.get("GH_TOKEN"):
@@ -84,10 +98,11 @@ def main():
     for i, f in enumerate(files, 1):
         raw = show(f)
         # 内容没变就跳过：避免给每个文件都留一个空提交
-        same = False
+        cur_sha, same = None, False
         if f in old:
             try:
                 cur = api("/repos/%s/contents/%s?ref=main" % (REPO, urllib.parse.quote(f)))
+                cur_sha = cur.get("sha")
                 if cur.get("encoding") == "base64":
                     exist = base64.b64decode(cur["content"])
                     same = exist.replace(b"\r\n", b"\n") == raw.replace(b"\r\n", b"\n")
@@ -105,6 +120,9 @@ def main():
 
         payload = {"message": msg, "branch": "main",
                    "content": base64.b64encode(raw).decode()}
+        if cur_sha:
+            # 更新已有文件必须带当前 sha，否则 422
+            payload["sha"] = cur_sha
         try:
             r = api("/repos/%s/contents/%s" % (REPO, urllib.parse.quote(f)), payload)
             n_new += 1
