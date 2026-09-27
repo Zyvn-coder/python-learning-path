@@ -1,0 +1,17 @@
+# 统一换行符：仓库里一律 LF，检出到 Windows 时按原样保留，
+# 免得同一份 .md 在不同机器上产生整文件级的 diff 噪声。
+* text=auto eol=lf
+
+# 产物是单文件 HTML，别做文本转换以外的处理
+*.html text eol=lf
+*.md   text eol=lf
+*.py   text eol=lf
+*.json text eol=lf
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
