@@ -23,8 +23,17 @@ Python 3.9+ 即可。
 python tools/build.py
 ```
 
-会在仓库根目录覆盖写出 `python-学习工作台.html`，同时生成中间产物
-`tools/_content.json`（每页的 HTML 与条目计数，排错用）。
+会在仓库根目录写出**两份内容完全相同的 HTML**：
+
+| 文件 | 用途 |
+|---|---|
+| `python-学习工作台.html` | 本地双击用，原始名字（README 里引的也是它） |
+| `index.html` | 给 GitHub Pages 当站点首页，URL 才干净 |
+
+两份由同一次构建写出，所以不存在"改完忘同步"。**别手工编辑这两份中的任何一份**
+——它们是产物，下次构建会被覆盖。
+
+同时生成中间产物 `tools/_content.json`（每页的 HTML 与条目计数，排错用）。
 
 构建脚本里集中放了几条内容约定，改 `template.html` 之前值得先读一遍
 `build.py` 的注释：
