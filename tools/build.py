@@ -21,9 +21,25 @@ import markdown
 
 BUILD = Path(__file__).resolve().parent
 ROOT = BUILD.parent
+# 兼容早期的开发位置 `.workbuddy/build/`：那时 BUILD 的上一级是 `.workbuddy`，
+# 再上一级才是仓库根。加这一句，同一个脚本在两个位置都跑得对，
+# 也就不存在「两份 build.py 各自漂移」的问题（真踩过：改了一份，另一份是旧的）。
+if ROOT.name == ".workbuddy":
+    ROOT = ROOT.parent
 TPL = BUILD / "template.html"
 OUT = ROOT / "python-学习工作台.html"
 INDEX = ROOT / "index.html"
+
+# README 里**只给 GitHub 页面看**、不进工作台首页的章节。
+# 工作台首页是把 README 的 `##` 章节拼起来渲染的，所以默认全都进；
+# 下面这几个是例外，理由各不相同，逐条写清楚免得以后有人以为漏了：
+#
+#   · 界面预览 —— 是外链图片。工作台是**单文件离线**的，图片没被打包进去，
+#     放进首页只会是一排碎图；何况正在用工作台的人，也不需要看它长什么样。
+#   · 里程碑自测 —— 工作台自己有一份**可勾选**的同款清单（模板里 .mile 那几张卡）。
+#     把 README 这份纯文本版再塞进首页，就是同一件事说两遍。
+#   · 许可 —— 指向 LICENSE 文件，单文件里点不开；离线看课程的人也不关心。
+HOME_SKIP = ("📸 界面预览", "✅ 里程碑自测", "📄 许可")
 
 # ---------------------------------------------------------------- 阶段元信息
 STAGES = [
@@ -515,13 +531,26 @@ def faqify(html: str) -> str:
 
 
 # ---------------------------------------------------------------- README 首页
-def build_home() -> str:
+def build_home():
+    """把 README 编译成工作台首页的说明区，返回 (进了首页的章节, 被跳过的章节标题)。
+
+    只取二级标题及其正文：
+      · `# ...` 主标题，以及**第一个二级标题之前**的内容（项目简介、在线地址等），
+        属于 GitHub 页面专用，不进首页——首页已经有自己的英雄区了；
+      · HOME_SKIP 里的章节也跳过，理由见那里的注释。
+
+    返回值里带上"跳过了哪些"，是为了写进构建报告：万一哪天想确认某个章节
+    到底进没进首页，看一眼报告就知道，不用去翻产物。
+    """
     raw = (ROOT / "README.md").read_text(encoding="utf-8")
     sections = split_sections(raw)
 
-    keep = []
+    keep, skipped = [], []
     for sec in sections:
         if sec["title"] is None:
+            continue
+        if sec["title"] in HOME_SKIP:
+            skipped.append(sec["title"])
             continue
         keep.append((sec["title"], strip_fences_edges("\n".join(sec["body"]))))
 
@@ -536,16 +565,33 @@ def build_home() -> str:
         html = html.replace('href="03-高级应用.md"', 'href="#/s3"')
         html = html.replace('href="04-方向拓展与毕业项目.md"', 'href="#/s4"')
         chunks.append({"title": title, "html": html})
-    return chunks
+    return chunks, skipped
 
 
 # ---------------------------------------------------------------- 主流程
 def main() -> None:
     stages = [build_stage(m) for m in STAGES]
-    home = build_home()
+    home, home_skipped = build_home()
     data = {"stages": stages, "home": home}
 
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+    # 「单文件、离线、零外部依赖」这条承诺的底线检查：产物里不该有 <img>。
+    # 模板自己一个图片标签都没有，所以只要冒出图片，必然是 README 新加了图片章节
+    # 却忘了加进 HOME_SKIP——离线打开时那就是一排碎图。
+    # 直接让构建失败，比等用户在离线环境里发现要好。
+    #
+    # ⚠️ 必须查在下面那行 `<` → `\u003c` 转义**之前**。第一版查的是转义后的
+    #    最终 HTML，于是 `<img` 早已变成 `\u003cimg`，`count("<img")` 恒为 0——
+    #    守卫生效与否全看运气，负向对照一测就露馅了。
+    n_img = payload.count("<img")
+    if n_img:
+        raise SystemExit(
+            "构建失败：注入内容里有 %d 个 <img>，会破坏「单文件离线」。\n"
+            "  这些图片来自 README——把对应章节加进 build.py 的 HOME_SKIP 即可。\n"
+            "  （在线的 GitHub 页面照常显示，只是不进工作台首页。）" % n_img
+        )
+
     payload = payload.replace("<", "\\u003c")
 
     tpl = TPL.read_text(encoding="utf-8")
@@ -574,6 +620,7 @@ def main() -> None:
         ],
         "total_sections": total_lessons,
         "home_sections": [h["title"] for h in home],
+        "home_skipped": home_skipped,
     }
     (BUILD / "_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
