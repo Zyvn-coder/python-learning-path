@@ -1,11 +1,15 @@
-"""把 17 个场景的探测结果压缩成一张通过/失败清单。"""
+"""把 18 个场景的探测结果压缩成一张通过/失败清单。"""
 import datetime
 import json, os, glob, re
 
 D = os.path.dirname(os.path.abspath(__file__))
+# ⚠️ 场景数 ≠ 页面数。套件只跑这里列出的路由，所以"0 控制台错误"这句话的
+# 分母是**场景覆盖到的路由**，不是全部 34 个页面。曾经因为漏了 stage，
+# 阶段页上的 TypeError 躲了很久——加场景时请对照 KIND 清单数一遍。
 ORDER = ['home', 'lesson', 'exopen', 'review', 'spaced', 'quiz', 'today',
          'gradplan', 'gradplanFull',
          'grad', 'picker', 'grad430', 'hwstuck', 'records', 'exstale',
+         'stage',
          'narrow430', 'narrow768']
 
 # 可勾的练习项总数 = 课内作业 120 + 方向练习题 22 + 阶段项目交付要求 18 + 毕业验收 9。
@@ -123,6 +127,14 @@ ASSERT = {
         ('metrics.CT_SWEEP', [], '浅色对比度全部达标'),
         ('metrics.CT_SWEEP_DARK', [], '深色对比度全部达标'),
         ('metrics.NO_HSCROLL', 'yes', '无横向滚动条'),
+        # 首页说明区的标题大纲。缺陷史：readme 只拼 html、把 title 丢掉，
+        # 7 个 `##` 标题全不渲染，其 `###` 子节以 h3 挂在「四个阶段」底下。
+        # 期望值由探针从 COURSE.home 里现推（不写死标题文字），逐字比对。
+        ('metrics.DOC_H2_MATCH', True, 'README 各章节标题都在，且次序与数据一致'),
+        ('metrics.DOC_FIRST_HEAD_IS_H2', True, '说明区的第一个标题是段标题，不是子节'),
+        ('metrics.DOC_H2_BEFORE_H3', 0, '没有子节跑在所属段标题前面'),
+        ('metrics.HOME_H1_N', 1, '整页只有一个 h1'),
+        ('metrics.HOME_SKIP', '', '标题层级不跳档'),
         ('metrics.HELP_OPEN', '1', '帮助面板可打开'),
         ('metrics.HELP_BODY_LOCK', 'hidden', '帮助面板锁滚动'),
         ('metrics.HELP_CLOSED', '0', '帮助面板可关闭'),
@@ -730,6 +742,36 @@ ASSERT = {
         ('metrics.SMALL', [], '触摸目标均 >=44px'),
         ('metrics.NO_HSCROLL', 'yes', '无横向滚动条'),
         ('metrics.CT_SWEEP', [], '浅色对比度全部达标'),
+    ],
+    # 阶段页（#/s1…#/s4）。补这个场景的直接原因：原来的 17 个场景**从不访问阶段页**，
+    # 于是 refreshProgress 里那个 TypeError 一直没被守住。断言刻意"成对"：
+    # 既要确认修好了（无报错、焦点归位），也要确认没修过头
+    # （课时卡没被写上阶段合计）。
+    'stage': [
+        ('has_probe', True, '探针注入成功'),
+        ('metrics.__ALIVE', 1, '脚本未崩'),
+        ('metrics.__DONE', 1, '流程跑完'),
+        # 场景 hash 就落在 #/s2，所以这一条能抓住「启动期渲染」抛的错
+        ('metrics.__HASH', '#/s2', '场景确实停在阶段页上'),
+        ('metrics.__BOOT_ERR', [], '启动期渲染无 JS 报错（修复前这里是 TypeError）'),
+        ('metrics.__ERRS_N', 0, '四页走完累计 0 报错'),
+        ('metrics.__ERRS_AFTER_WALK', 0, '换页过程中没有新增报错'),
+        ('metrics.STAGE_N', 4, '四个阶段页都走到了'),
+        ('metrics.STAGE_H1_MATCH', True, '每页标题 = 该阶段名称（没悄悄回落首页）'),
+        ('metrics.STAGE_NO_HOME_FALLBACK', True, '阶段页不渲染首页的阶段网格'),
+        ('metrics.STAGE_CARDS_POS', True, '每页都列出了本阶段内容'),
+        # 反方向：课时卡的状态只该是「已完成 / 未开始」，出现 "n / m"
+        # 就说明阶段合计被写到课时卡上了（修过头）
+        ('metrics.STAGE_NO_TOTAL_ON_CARD', True, '课时卡没被写上阶段合计'),
+        ('metrics.STAGE_FOCUS',
+         'MAIN#contentRoot,MAIN#contentRoot,MAIN#contentRoot,MAIN#contentRoot',
+         '换页后焦点都落到正文'),
+        ('metrics.STAGE_FOCUS_OK', True, '焦点归位契约成立'),
+        # 阶段页也一并纳入几何与对比度的常规扫描（四页合并上报）
+        ('metrics.OVF', [], '四页均无横向溢出'),
+        ('metrics.SMALL', [], '四页触摸目标均 >=44px'),
+        ('metrics.NO_HSCROLL', 'yes', '四页均无横向滚动条'),
+        ('metrics.CT_SWEEP', [], '四页浅色对比度全部达标'),
     ],
     # 窄屏版：只验"有没有塌成单列、有没有把页面撑破"。
     # 功能态由 grad 场景在宽屏下验，两边不重复数数。
