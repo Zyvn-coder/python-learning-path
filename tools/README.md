@@ -69,17 +69,22 @@ README 也要重新 build**，否则首页那份说明是旧的。但有两处�
 验收是**无头 Chrome 注入探针 → 读运行时数值 → 断言**，不是肉眼看。
 
 ```bash
-# 全部 17 个场景
+# 全部 18 个场景
 python tools/_browser.py home lesson exopen review spaced quiz today \
     gradplan gradplanFull grad picker grad430 hwstuck records exstale \
-    narrow430 narrow768
+    stage narrow430 narrow768
 
 # 把结果压成通过/失败清单
 python tools/_report.py
 ```
 
 结果落在 `tools/_browser_<场景>.json`，汇总打印形如
-`断言总数 640，失败 0`。
+`断言总数 663，失败 0`。
+
+> ⚠️ **场景数 ≠ 页面数。** 这里的"0 控制台错误"只管**场景覆盖到的路由**。
+> 曾经 17 个场景里没有一条访问阶段页（`#/s1`–`#/s4`），于是阶段页上抛的
+> TypeError 一直躲着——直到把 `stage` 场景补上才现形。**加路由时请顺手数一遍
+> 分母**：`_report.py` 的 `ORDER` 必须覆盖每一种页面类型（见 `kind` 清单）。
 
 `_report.py` 里还做**跨场景一致性**检查（比逐场景断言更狠）：比如
 "首页计划卡上的数字 = 侧栏徽章 = 底层统计"三处必须同数，毕业页两组状态的
@@ -120,7 +125,7 @@ python tools/_shots.py 01-home-light      # 只拍某几张
 | `build.py` | 主编译器：4 份 `.md` + `template.html` → 单文件 HTML |
 | `template.html` | 前端模板：样式、交互、状态层全部在这里（占位符 `/*__COURSE_DATA__*/null`） |
 | `_browser.py` | 无头浏览器注入探针、跑场景、回传运行时数值 |
-| `_report.py` | 把 17 个场景的结果压成通过/失败清单 + 跨场景一致性检查 |
+| `_report.py` | 把 18 个场景的结果压成通过/失败清单 + 跨场景一致性检查 |
 | `_shots.py` | 截图取证 |
 | `_smoke_grad.py` / `_smoke_pick.py` | 单个功能的冒烟探针（比全套快得多，改功能时先用） |
 | `_probecheck.py` / `_jscheck.py` | 探针脚本 / 产物内联 JS 的语法预检 |
