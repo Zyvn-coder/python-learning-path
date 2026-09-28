@@ -304,6 +304,40 @@ P.p('MILE_N',P.all('.mile li').length);
 P.p('FAQ_N',P.all('details.faq').length);
 P.p('HERO_TABLES',P.all('.doc table').length);
 
+// ---- 首页说明区的标题大纲 ----
+// 缺陷史：`COURSE.home.map(s => s.html)` 只拼了正文、把 s.title 丢掉，于是
+// README 的 7 个 `##` 标题全都不渲染，它们的 `###` 子节就以 h3 直接挂在
+// 「四个阶段」底下——按标题跳读的人会以为「课程规模」属于「四个阶段」。
+// 修好后把这里翻成闸门。注意：这个缺陷**不是**层级跳跃（h2 后面跟 h3 本来合法），
+// 而是**标题整个丢了**，所以断言必须查"标题在不在、次序对不对"，查跳级是抓不住的。
+var __docH2 = P.all('.doc h2').map(function(h){return h.textContent.trim()});
+var __want  = (COURSE.home||[]).map(function(s){return (s.title||'').trim()});
+P.p('DOC_H2_N',__docH2.length);
+P.p('HOME_TITLES',__want.join('|'));
+// 只比前 N 个：`.doc` 里还挂着模板自己的「里程碑自测」段头，它是 h2 但不在 README 里
+P.p('DOC_H2_HEAD',__docH2.slice(0,__want.length).join('|'));
+P.p('DOC_H2_MATCH',__docH2.slice(0,__want.length).join('|')===__want.join('|'));
+// `.doc` 里出现的第一个标题必须是 h2（段的标题），而不是某个段的 h3 子节
+P.p('DOC_FIRST_HEAD_IS_H2',(function(){
+  var hs=P.all('.doc h2, .doc h3');
+  return hs.length? (hs[0].tagName==='H2') : false;
+})());
+P.p('DOC_H2_BEFORE_H3',(function(){
+  var hs=P.all('.doc h2, .doc h3'), seenH2=false, bad=0;
+  hs.forEach(function(h){ if(h.tagName==='H2')seenH2=true; else if(!seenH2)bad++; });
+  return bad;
+})());
+// 顺带的通例：整页只有一个 h1，且标题层级不跳档
+P.p('HOME_H1_N',document.querySelectorAll('h1').length);
+P.p('HOME_SKIP',(function(){
+  var hs=[].slice.call(document.querySelectorAll('h1,h2,h3,h4,h5,h6')),bad=[];
+  for(var i=1;i<hs.length;i++){
+    var a=+hs[i-1].tagName[1], b=+hs[i].tagName[1];
+    if(b>a+1) bad.push(a+'>'+b+':'+hs[i].textContent.trim().slice(0,16));
+  }
+  return bad.join(',');
+})());
+
 // ---- 快捷键：? 帮助面板 ----
 P.key('?');
 await P.wait(250);
@@ -1908,6 +1942,62 @@ P.p('CLICK_HASH',location.hash);
 P.p('CLICK_PILLS',P.all('.grad-pill').length);
 """
 
+# 阶段页（#/s1…#/s4）。补这个场景是因为：套件原先的 17 个场景从不访问阶段页，
+# 于是「0 控制台错误」只对 34 个页面里的 17 条路由成立——阶段页上抛的
+# TypeError（refreshProgress 里 .stage-card 没筛 data-stage）就这么躲过去了。
+# 场景的 hash 直接落在 #/s2，所以启动期渲染的报错会由通用的 __BOOT_ERR 兜住；
+# 场景体内再走完 4 个阶段页，覆盖"换页之后"的报错与焦点归位。
+STAGE_UI = r"""
+await P.ready('#contentRoot');
+await P.wait(300);
+
+// 期望值从应用自己的数据里推，不写死在探针里
+var ids = COURSE.stages.map(function(s){return s.id});
+
+var rows = [];
+var ovfAll = [], smallAll = [], ctAll = [], hscrollBad = 0;
+for (var i=0;i<ids.length;i++){
+  location.hash = '#/' + ids[i];
+  await P.wait(260);
+  var st = COURSE.stages[i];
+  var h1 = P.ob('#contentRoot h1');
+  var act = document.activeElement || {};
+  var statuses = P.all('.stage-card .sc-pct').map(function(e){return e.textContent.trim()});
+  rows.push({
+    id: ids[i],
+    want: st.name,
+    h1: h1 ? h1.textContent.trim() : '',
+    focus: (act.tagName||'') + '#' + (act.id||'-'),
+    cards: P.all('.stage-card').length,
+    // 课时卡的状态只该是「已完成 / 未开始」；出现 "n / m" 就说明
+    // refreshProgress 把"阶段合计"写到课时卡上了
+    stageTotalsOnCard: statuses.filter(function(s){return /^\d+\s*\/\s*\d+$/.test(s)}).length,
+    homeGrid: P.all('#stageGrid').length
+  });
+  // 四页各扫一遍几何与对比度，合并上报（每页单独报会变成 4 组同名指标）
+  ovfAll = ovfAll.concat(P.ovf());
+  smallAll = smallAll.concat(P.small());
+  ctAll = ctAll.concat(P.contrastSweep());
+  if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) hscrollBad++;
+}
+
+P.p('STAGE_ROWS', JSON.stringify(rows));
+P.p('STAGE_N', rows.length);
+// 路由真的解析到了对应的阶段（而不是悄悄回落到首页）
+P.p('STAGE_H1_MATCH', rows.every(function(r){return r.h1===r.want}));
+P.p('STAGE_NO_HOME_FALLBACK', rows.every(function(r){return r.homeGrid===0}));
+P.p('STAGE_CARDS_POS', rows.every(function(r){return r.cards>0}));
+P.p('STAGE_NO_TOTAL_ON_CARD', rows.every(function(r){return r.stageTotalsOnCard===0}));
+// 换页后焦点要落到正文（render() 末尾那步；它原先被抛出的异常中断了）
+P.p('STAGE_FOCUS', rows.map(function(r){return r.focus}).join(','));
+P.p('STAGE_FOCUS_OK', rows.every(function(r){return r.focus==='MAIN#contentRoot'}));
+P.p('__ERRS_AFTER_WALK', (window.__errs||[]).length);
+P.p('NO_HSCROLL', hscrollBad===0 ? 'yes' : ('NO-BAD x'+hscrollBad));
+P.p('OVF', ovfAll.slice(0,12));
+P.p('SMALL', smallAll.slice(0,20));
+P.p('CT_SWEEP', ctAll.slice(0,12));
+"""
+
 
 SCEN = {
     "home": ("", 1440, 1000, HOME_UI),
@@ -1939,6 +2029,8 @@ P.p('BENCH',typeof window.__bench);
     # 「该毕业了」提示：课程走完那一刻出现，毕业项目满格后翻成「已达成」
     "gradplan": ("", 1440, 1080, GRADPLAN_UI),
     "gradplanFull": ("", 1440, 1080, GRADPLAN_UI),
+    # 阶段页：hash 落在 #/s2，所以启动期报错由 __BOOT_ERR 兜住
+    "stage": ("#/s2", 1440, 1100, STAGE_UI),
 }
 
 BUDGET = 150000
