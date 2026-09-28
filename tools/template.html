@@ -1593,12 +1593,19 @@ function refreshProgress() {
   $('#ringTxt').textContent = pct + '%';
   $('#progRing').title = `总进度 ${n} / ${TOTAL} 项（${pct}%）`;
   $$('.nav-item').forEach(el => { el.dataset.done = isDone(el.dataset.id) ? '1' : '0'; });
-  $$('.nav-bar').forEach(el => {
+  $$('.nav-bar[data-stage]').forEach(el => {
     const st = STAGE_BY_ID[el.dataset.stage];
     const p = stageDone(st);
     $('i', el).style.width = (p.t ? p.n / p.t * 100 : 0) + '%';
   });
-  $$('.stage-card').forEach(el => {
+  // ⚠️ `.stage-card` 这个类被两处复用：首页的阶段卡（带 data-stage），
+  // 以及**阶段页里的课时卡**（只有 data-id，它自己的进度条在 renderStage 里就写好了）。
+  // 早先这里没做筛选，阶段页就会拿到 STAGE_BY_ID[undefined] → stageDone(undefined)
+  // 抛 TypeError，把整个 refreshProgress 连同其后的 refreshReviewBadge / paintRvBar /
+  // 焦点归位一起中断——而验收套件的 17 个场景从不访问 #/s1…#/s4，所以一直没被发现。
+  // 用 [data-stage] 筛选而不是 return 兜底：不筛选的话，即使不抛错也会把
+  // 「阶段进度」写到课时卡上，是错的数。
+  $$('.stage-card[data-stage]').forEach(el => {
     const st = STAGE_BY_ID[el.dataset.stage];
     const p = stageDone(st);
     $('.sc-bar i', el).style.width = (p.t ? p.n / p.t * 100 : 0) + '%';
@@ -1687,7 +1694,14 @@ function renderHome() {
   const last = state.last && ITEM_BY_ID[state.last] ? ITEM_BY_ID[state.last] : null;
   const nextTodo = ITEMS.find(i => !isDone(i.id));
 
-  const readme = COURSE.home.map(s => s.html).join('\n');
+  // ⚠️ 每节的标题必须一起渲染出来。早先这里只拼了 s.html、把 s.title 扔掉，
+  // 于是 README 的 7 个 `##` 标题（这是什么 / 工作台里有什么 / 课程大纲 …）
+  // 在首页**完全没有标题**，它们的 `###` 子节就以 h3 直接挂在「四个阶段」底下——
+  // 标题大纲对读屏不成立（按标题跳读的人会以为「课程规模」属于「四个阶段」）。
+  // 而 `.doc h2{…}` 那条带分隔线的段标题样式一直没被命中过，就是在等这一行。
+  const readme = COURSE.home.map(s =>
+    (s.title ? `<h2>${esc(s.title)}</h2>` : '') + s.html
+  ).join('\n');
 
   $('#contentRoot').className = 'content wide';
   $('#contentRoot').innerHTML = `
